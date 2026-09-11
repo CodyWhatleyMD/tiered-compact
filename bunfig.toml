@@ -1,0 +1,4 @@
+[test]
+# Redirects the omission cache away from the user's real ~/.claude directory
+# for the whole test run. See tests/setup.ts.
+preload = ["./tests/setup.ts"]

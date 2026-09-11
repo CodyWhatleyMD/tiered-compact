@@ -1,0 +1,19 @@
+{
+  "name": "riverbed-compact-workspace",
+  "private": true,
+  "description": "Riverbed Compact \u2014 directed, lossless context compaction plugin for Claude Code.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "license": "BSD-3-Clause",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.21.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "latest",
+    "typescript": "^5"
+  }
+}

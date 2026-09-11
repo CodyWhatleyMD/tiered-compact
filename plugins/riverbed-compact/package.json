@@ -1,0 +1,24 @@
+{
+  "name": "riverbed-compact",
+  "version": "0.3.0",
+  "description": "Riverbed Compact plugin for Claude Code \u2014 directive-driven fork of Magic Compact.",
+  "type": "module",
+  "module": "src/index.ts",
+  "main": "src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "license": "BSD-3-Clause",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.21.3"
+  },
+  "files": [
+    ".claude-plugin",
+    ".mcp.json",
+    "hooks",
+    "skills",
+    "src"
+  ]
+}
