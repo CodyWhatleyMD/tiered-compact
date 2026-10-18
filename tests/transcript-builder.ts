@@ -24,7 +24,7 @@
  * (uuid + type) and isHumanUserRow (user, non-tool-result, isMeta !== true).
  */
 import { randomUUID } from "node:crypto";
-import type { JsonRecord } from "../plugins/riverbed-compact/src/transcript";
+import type { JsonRecord } from "../plugins/tiered-compact/src/transcript";
 
 export const SESSION_ID = "synthetic-source-session";
 
@@ -302,7 +302,7 @@ export async function writeSummaries(
 ): Promise<void> {
   const dir = transcriptPath.slice(0, transcriptPath.lastIndexOf("/"));
   await Bun.write(
-    `${dir}/riverbed-summaries.json`,
+    `${dir}/tiered-summaries.json`,
     `${JSON.stringify({ summaries }, null, 2)}\n`,
   );
 }

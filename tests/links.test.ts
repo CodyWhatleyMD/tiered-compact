@@ -23,12 +23,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildCompactedRows, createPlan } from "../plugins/riverbed-compact/src/compact";
+import { buildCompactedRows, createPlan } from "../plugins/tiered-compact/src/compact";
 import {
   originKey,
   type JsonRecord,
   type TranscriptRow,
-} from "../plugins/riverbed-compact/src/transcript";
+} from "../plugins/tiered-compact/src/transcript";
 import {
   assistantRow,
   chainRows,
@@ -38,19 +38,19 @@ import {
   userRow,
 } from "./helpers";
 
-const PRELOADED_CACHE_DIR = process.env["RIVERBED_COMPACT_CACHE_DIR"] as string;
+const PRELOADED_CACHE_DIR = process.env["TIERED_COMPACT_CACHE_DIR"] as string;
 
 let cacheDir: string;
 
 beforeAll(async () => {
-  cacheDir = await mkdtemp(join(tmpdir(), "riverbed-links-"));
-  process.env["RIVERBED_COMPACT_CACHE_DIR"] = cacheDir;
+  cacheDir = await mkdtemp(join(tmpdir(), "tiered-links-"));
+  process.env["TIERED_COMPACT_CACHE_DIR"] = cacheDir;
 });
 
 afterAll(async () => {
   // Restore, never delete: the preload (tests/setup.ts) owns this variable,
   // and unsetting it here sent every LATER test file to the real cache.
-  process.env["RIVERBED_COMPACT_CACHE_DIR"] = PRELOADED_CACHE_DIR;
+  process.env["TIERED_COMPACT_CACHE_DIR"] = PRELOADED_CACHE_DIR;
   await rm(cacheDir, { recursive: true, force: true });
 });
 

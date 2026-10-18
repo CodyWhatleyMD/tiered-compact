@@ -1,11 +1,11 @@
 {
-  "name": "riverbed-compact",
-  "version": "0.3.0",
+  "name": "tiered-compact",
+  "version": "0.4.0",
   "description": "Directed, lossless context compaction for Claude Code: the live session (or its forks/subagents) authors the summaries, a hook assembles the compacted session.",
   "author": {
     "name": "Cody Whatley",
     "url": "https://github.com/CodyWhatleyMD"
   },
   "license": "BSD-3-Clause",
-  "homepage": "https://github.com/CodyWhatleyMD/riverbed-compact"
+  "homepage": "https://github.com/CodyWhatleyMD/tiered-compact"
 }

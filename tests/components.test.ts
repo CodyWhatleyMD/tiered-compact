@@ -25,7 +25,7 @@ import {
   componentSpansOverlap,
   readActiveTranscriptRows,
   type TranscriptRow,
-} from "../plugins/riverbed-compact/src/transcript";
+} from "../plugins/tiered-compact/src/transcript";
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -33,7 +33,7 @@ afterEach(async () => {
 });
 
 async function writeTranscript(rows: TranscriptRow[]): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "riverbed-components-"));
+  const dir = await mkdtemp(join(tmpdir(), "tiered-components-"));
   dirs.push(dir);
   const path = join(dir, "t.jsonl");
   await Bun.write(path, `${rows.map(r => JSON.stringify(r)).join("\n")}\n`);

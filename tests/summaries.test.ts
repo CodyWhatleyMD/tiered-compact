@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
-import { shiftUncoveredTail, type Plan } from "../plugins/riverbed-compact/src/compact";
+import { shiftUncoveredTail, type Plan } from "../plugins/tiered-compact/src/compact";
 import {
   loadSummariesFile,
   resolveSummariesFromFile,
@@ -8,8 +8,8 @@ import {
   summariesPath,
   transcriptId,
   turnKey,
-} from "../plugins/riverbed-compact/src/summaries";
-import type { Turn, TranscriptRow } from "../plugins/riverbed-compact/src/transcript";
+} from "../plugins/tiered-compact/src/summaries";
+import type { Turn, TranscriptRow } from "../plugins/tiered-compact/src/transcript";
 
 function row(uuid: string): TranscriptRow {
   return {

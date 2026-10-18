@@ -10,10 +10,11 @@ import { createPlan as createEraPlan } from "./compact";
 import { readActiveTranscriptRows as readActiveRowsForEras } from "./transcript";
 import { transcriptId as eraTranscriptId } from "./summaries";
 import { turnUserPreview } from "./fork";
-import { isRecord } from "./transcript";
+import { isRecord, originKey } from "./transcript";
+import { channelKind, openingOf, rowText } from "./channel";
 import { unlink } from "node:fs/promises";
 import { compactTranscript } from "./compact";
-import { parseHookInput, parseRiverbedCompactCommand } from "./command";
+import { parseHookInput, parseTieredCompactCommand } from "./command";
 import { buildOrchestrationPayload } from "./fork";
 import { summariesPath } from "./summaries";
 import {
@@ -21,6 +22,7 @@ import {
   createTranscriptSession,
   resolveSessionTitle,
 } from "./transcript";
+import { carryDevMods, dropCarriedMods, modsNotice } from "./mods";
 
 type HookOutput = {
   continue?: false;
@@ -44,8 +46,8 @@ async function main(): Promise<void> {
     // answers "which session am I, and which file is mine" from inside.
     // Anchored like the compact matcher, and for the same reason: unanchored,
     // quoting the tag in a sentence hijacked the turn (see commandXmlPattern).
-    if (/^\/(?:riverbed-compact:)?whoami\b/.test(input.prompt.trim())
-        || /^<command-message>[^<]*<\/command-message>\s*<command-name>\/(?:riverbed-compact:)?whoami<\/command-name>/
+    if (/^\/(?:tiered-compact:)?whoami\b/.test(input.prompt.trim())
+        || /^<command-message>[^<]*<\/command-message>\s*<command-name>\/(?:tiered-compact:)?whoami<\/command-name>/
              .test(input.prompt)) {
       writeHookOutput({
         continue: false,
@@ -57,7 +59,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const command = parseRiverbedCompactCommand(input.prompt);
+    const command = parseTieredCompactCommand(input.prompt);
     if (command === null) {
       writeHookOutput({ suppressOutput: true });
       return;
@@ -70,13 +72,14 @@ async function main(): Promise<void> {
     // reading it cold. No file yet -> inject the era authoring instructions;
     // file present -> validated at assembly below.
     let eraTexts: Record<string, string> | null = null;
+    let eraPointers: string[] = [];
     // An existing valid eras file ALWAYS wins, flag or no flag — mirroring
     // the summaries rule. The two-round authoring flow hands the user a
     // final command printed by merge.ts, which doesn't carry --eras; on
     // 2026-08-27 that dropped the flag at the handoff and a fully-authored
     // era file sat ignored while the session was compacted at 950k. Curation
     // someone deliberately authored and stamped is intent; a flag is not
-    // allowed to be the only thing standing between it and the bed.
+    // allowed to be the only thing standing between it and the transcript.
     // (A file stamped for a DIFFERENT session still hard-fails in
     // loadErasFile — auto-use never crosses the stamp guard.)
     if (eras === null) {
@@ -85,6 +88,7 @@ async function main(): Promise<void> {
       );
       if (erasFile !== null) {
         eraTexts = erasFile.eras;
+        eraPointers = erasFile.pointers ?? [];
       }
     }
     if (eras !== null) {
@@ -106,6 +110,7 @@ async function main(): Promise<void> {
         // No collapsible eras — proceed as a plain compaction.
       } else {
         eraTexts = erasFile.eras;
+      eraPointers = erasFile.pointers ?? [];
       }
     }
 
@@ -137,6 +142,10 @@ async function main(): Promise<void> {
     }
 
     const destination = await createTranscriptSession(input.transcript_path);
+    // Mods don't follow a session id on their own; see mods.ts. A failed copy
+    // must not block the crossing, so it only costs the notice paragraph.
+    const carry = await carryDevMods(input.session_id, destination.sessionId)
+      .catch(() => null);
     const compacted = await compactTranscript(
       input.transcript_path,
       destination.transcriptPath,
@@ -145,14 +154,19 @@ async function main(): Promise<void> {
       input.cwd,
       eraTexts === null
         ? null
-        : { keepNewest: eras ?? 1, texts: eraTexts },
-    );
+        : { keepNewest: eras ?? 1, texts: eraTexts, pointers: eraPointers },
+      carry === null ? null : modsNotice(carry),
+    ).catch(async (error: unknown) => {
+      if (carry !== null) await dropCarriedMods(carry).catch(() => undefined);
+      throw error;
+    });
     if (!compacted) {
+      if (carry !== null) await dropCarriedMods(carry).catch(() => undefined);
       await unlink(destination.transcriptPath).catch(() => undefined);
       writeHookOutput({
         continue: false,
         stopReason:
-          "Riverbed Compact skipped: no older assistant turns to compact.",
+          "Tiered Compact skipped: no older assistant turns to compact.",
       });
       return;
     }
@@ -180,9 +194,13 @@ async function main(): Promise<void> {
     writeHookOutput({
       continue: false,
       stopReason: [
-        `Riverbed Compact wrote ${destination.sessionId}:`,
+        `Tiered Compact wrote ${destination.sessionId}:`,
         `  summaries consumed: ${compacted.summariesConsumed}`
           + ` · eras collapsed: ${compacted.erasCollapsed}`
+          + (compacted.pointersCarried + compacted.pointersRefused > 0
+            ? ` · pointers: ${compacted.pointersCarried} carried`
+              + (compacted.pointersRefused > 0 ? `, ${compacted.pointersRefused} typed rows kept whole` : "")
+            : "")
           + ` · rows written: ${compacted.rowsWritten}`,
         `  plan: prefix=${compacted.prefixTurns}`
           + ` summarized=${compacted.summarizedTurns}`
@@ -193,12 +211,17 @@ async function main(): Promise<void> {
         "session, loaded cold. Exit this client fully, then:",
         `  claude --resume ${destination.sessionId}`,
         "(An in-place /resume carries this window's weight with you.)",
+        ...(carry === null ? [] : [
+          "",
+          `Mods carried to the new session: ${carry.mods.join(", ")}.`,
+          "Claude Code will ask you to enable hot reloading there; the answer is yours.",
+        ]),
       ].join("\n"),
     });
   } catch (error) {
     writeHookOutput({
       continue: false,
-      stopReason: `Riverbed Compact failed: ${error instanceof Error ? error.message : String(error)}`,
+      stopReason: `Tiered Compact failed: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
 }
@@ -211,9 +234,10 @@ await main();
 
 /**
  * Era-authoring instructions for the live instance. Lists every collapse
- * candidate with its span and previews; the stub contract is DIAGNOSTIC text
- * (discriminate this era from the others — cue-shaped, not summary-shaped),
- * pinned verbatims embedded exactly.
+ * candidate with its span and previews, and the rows in those eras that are in
+ * the person's channel but aren't their words (pointer candidates, channel.ts).
+ * Written as guidance with reasons, not orders: imperative wording gets
+ * followed even where the resident's judgment would do better.
  */
 async function buildEraAuthoringPayload(
   transcriptPath: string,
@@ -241,13 +265,31 @@ async function buildEraAuthoringPayload(
       ].join("\n");
     })
     .join("\n");
+  const channelRows = candidates.flatMap(era =>
+    era.turns.flatMap(turn =>
+      turn.userRows
+        .map(row => ({ row, kind: channelKind(row) }))
+        .filter(({ kind }) => kind !== "typed")
+        .map(({ row, kind }) =>
+          `  ${originKey(row)}  ${kind}, ${rowText(row).length} chars: "${openingOf(row, 70)}"`,
+        ),
+    ),
+  );
   return [
-    "[riverbed-compact --eras] No era file exists yet, so nothing was collapsed. YOU (the live instance) author the era stubs now. A stub is the last form its era takes, so it is written here rather than by a worker reading the rows cold. Then the user re-runs the same command to assemble.",
+    "[tiered-compact --eras] No era file exists yet, so nothing was collapsed. The stubs are yours to write: a stub is the last form its era takes, so the session that still has the material writes it. Two steps: (1) write the file described below; (2) re-run the same /tiered-compact command to assemble.",
     `collapse candidates (keeping the ${keepNewest} newest era(s) uncollapsed):`,
     listing,
-    "Stub contract: one entry per era. DIAGNOSTIC text, not a summary — write what discriminates THIS era from the others (names, decisions, artifacts, dates), because the stub's job is to cue retrieval, not to narrate. Embed the era's pinned verbatims EXACTLY. User rows survive whole automatically — do not restate them. The era's full rows stay retrievable via the Content ID printed in the stub row.",
-    `Write ${erasPath(transcriptPath)} containing {"transcript": "${eraTranscriptId(transcriptPath)}", "eras": {"<era key>": "<stub text>", ...}}. The "transcript" stamp is what stops another session in this project from consuming your eras — include it verbatim.`,
-    "Then re-run the exact same /riverbed-compact command to assemble. Before you do: if this project keeps durable notes, write down anything not yet recorded — it is cheaper to write it now, at full detail, than to reconstruct it from a stub later.",
+    "What a stub is for: retrieval. It works best when it says what sets this era apart from the others (names, decisions, artifacts, dates), so a later reader knows whether to open the era's full rows, which stay retrievable through the Content ID in the stub row. Discrimination matters more than narration.",
+    "The person's words: their typed rows in a collapsing era are copied whole, so the stub doesn't need to restate them. Quote exact wording only where the wording itself matters. Tiered Compact leans toward keeping the person's words; the rest is your judgment.",
+    ...(channelRows.length === 0 ? [] : [
+      [
+        "These rows in the collapsing eras are in the person's channel but aren't their words:",
+        ...channelRows,
+        "They ride whole by default. If one no longer earns its place as written, list its id under \"pointers\" in the file and it becomes a one-line pointer naming its source, with the original kept in the era's full rows. When in doubt, keep it. Typed rows can't be pointered; tiered-compact keeps them whole even if listed.",
+      ].join("\n"),
+    ]),
+    `The file: ${erasPath(transcriptPath)} containing {"transcript": "${eraTranscriptId(transcriptPath)}", "eras": {"<era key>": "<stub text>", ...}${channelRows.length === 0 ? "" : ', "pointers": ["<row id>", ...]'}}. Every candidate era needs a stub (a missing one stops the assembly and names it). The "transcript" stamp keeps another session in this project from consuming your file; copy it as given.`,
+    "Before re-running: anything this project should remember that isn't written down yet is cheaper to write now, at full detail, than to reconstruct from a stub later.",
   ].join("\n\n");
 }
 

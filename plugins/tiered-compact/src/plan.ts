@@ -3,9 +3,9 @@
  *
  *   bun src/plan.ts <transcriptPath> <keepN>
  *
- * Prints, as JSON, the turns /riverbed-compact would summarize at keepN —
+ * Prints, as JSON, the turns /tiered-compact would summarize at keepN —
  * keyed exactly as the summaries file expects — so the live in-context
- * instance can write riverbed-summaries.json next to the transcript and the
+ * instance can write tiered-summaries.json next to the transcript and the
  * hook can compact without ever spawning a headless resume.
  *
  * Read-only: touches nothing, writes nothing.
@@ -82,8 +82,8 @@ async function main(): Promise<void> {
       note: interiorGaps
         ? "interior gaps: fill the missing keys (listed under turns[].covered=false) — the merge hard-fails on these"
         : uncoveredTail > 0
-          ? `uncovered tail of ${uncoveredTail} turn(s) will ride whole automatically (drift tolerance) — or run /riverbed-compact ${keepTurns + uncoveredTail} to match the file exactly`
-          : "file fully covers the plan — run /riverbed-compact "
+          ? `uncovered tail of ${uncoveredTail} turn(s) will ride whole automatically (drift tolerance) — or run /tiered-compact ${keepTurns + uncoveredTail} to match the file exactly`
+          : "file fully covers the plan — run /tiered-compact "
             + String(keepTurns),
     };
   } else if (fileError !== undefined) {

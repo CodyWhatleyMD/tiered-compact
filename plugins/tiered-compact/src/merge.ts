@@ -3,15 +3,15 @@
  *
  *   bun src/merge.ts <transcriptPath> <boundaryKey|END>
  *
- * Collects riverbed-summaries.part-*.json next to the transcript, validates
+ * Collects tiered-summaries.part-*.json next to the transcript, validates
  * that together they cover every non-scaffold turn BEFORE the boundary turn
  * (anchored by uuid, so orchestration turns appended since the plan don't
- * shift the target set), writes riverbed-summaries.json, retires the partials
+ * shift the target set), writes tiered-summaries.json, retires the partials
  * to .merged, and prints the recommended N for the final plain
- * /riverbed-compact run. The recommended N counts turns from the boundary to
+ * /tiered-compact run. The recommended N counts turns from the boundary to
  * the current end PLUS ONE for the handoff turn the orchestrator writes after
  * this merge; every turn between boundary and handoff must carry the
- * [[riverbed:scaffold]] marker or it will surface as a missing-summary error
+ * [[tiered:scaffold]] marker or it will surface as a missing-summary error
  * at compaction time (by design).
  */
 import { readdir, rename } from "node:fs/promises";
@@ -30,7 +30,7 @@ import {
   type TranscriptRow,
 } from "./transcript";
 
-const PART_PREFIX = "riverbed-summaries.part-";
+const PART_PREFIX = "tiered-summaries.part-";
 
 async function main(): Promise<void> {
   const [transcriptPath, boundaryKey] = process.argv.slice(2);
@@ -127,7 +127,7 @@ async function main(): Promise<void> {
   // +1: the merge runs inside the orchestrator's final (handoff) turn, whose
   // assistant rows are typically not yet flushed to the transcript when this
   // executes — so the on-disk count is one turn short of the count the final
-  // /riverbed-compact run will see. Timing-dependent; the payload instructs
+  // /tiered-compact run will see. Timing-dependent; the payload instructs
   // the orchestrator to sanity-check N against the flushed transcript.
   const recommendedN = turns.length - boundaryIndex + 1;
   console.log(
@@ -137,9 +137,9 @@ async function main(): Promise<void> {
         turnsCovered: needed.length,
         parts: partNames.length,
         extrasIgnored: extras.length,
-        recommendedCommand: `/riverbed-compact ${recommendedN}${
+        recommendedCommand: `/tiered-compact ${recommendedN}${
           (await Bun.file(
-            join(dirname(transcriptPath), "riverbed-eras.json"),
+            join(dirname(transcriptPath), "tiered-eras.json"),
           ).exists())
             ? " --eras"
             : ""
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
 // Accepts either marker; see the note in compact.ts. Not Claude Code's own
 // `isCompactSummary` field, which is a different thing entirely.
 function isCompactSummaryRow(row: TranscriptRow): boolean {
-  for (const field of ["riverbedCompact", "magicCompact"]) {
+  for (const field of ["tieredCompact", "magicCompact"]) {
     const marker = row[field];
     if (isRecord(marker) && marker["summary"] === true) {
       return true;

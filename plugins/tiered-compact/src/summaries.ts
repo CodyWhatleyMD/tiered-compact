@@ -2,7 +2,7 @@ import { rename } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { isRecord, originKey, type Turn } from "./transcript";
 
-export const SUMMARIES_FILENAME = "riverbed-summaries.json";
+export const SUMMARIES_FILENAME = "tiered-summaries.json";
 
 /**
  * Summaries file contract (mode B — "the summarizer is the live session"):
@@ -22,7 +22,7 @@ export const SUMMARIES_FILENAME = "riverbed-summaries.json";
  *
  * The live in-context instance enumerates turns with `bun src/plan.ts
  * <transcript> <keepN>`, writes this file next to the transcript, and then
- * the user runs /riverbed-compact N — the hook consumes the file instead of
+ * the user runs /tiered-compact N — the hook consumes the file instead of
  * spawning a headless `claude -p --resume`, which cannot survive large
  * transcripts ("Prompt is too long" at ~45MB, observed 2026-07-08).
  *
@@ -42,7 +42,7 @@ export type SummariesFile = {
  *
  * Summaries are prepared per-session but live in a per-PROJECT directory, so
  * two sessions in the same project share one filename. On 2026-08-18 a
- * /riverbed-compact typed into the wrong tab consumed (and retired) another
+ * /tiered-compact typed into the wrong tab consumed (and retired) another
  * thread's prepared summaries: zero keys matched, nothing was assembled, and
  * the rightful session was left with an empty shelf and no error anywhere.
  * Stamping the file with its transcript makes that mismatch loud.
@@ -122,7 +122,7 @@ export function summariesPath(transcriptPath: string): string {
 /**
  * A stamp is honored when it names THIS session — or a provable ANCESTOR of
  * it. Session ids drift between authoring and assembly (native splits,
- * riverbed mints, client restarts): on 2026-08-27 a valid, fully-authored
+ * tiered-compact mints, client restarts): on 2026-08-27 a valid, fully-authored
  * eras file was refused because its author session had been compacted in between,
  * and the unblock was a human restamping the file by hand. Lineage is
  * provable from the transcript itself: a continuation carries its ancestor's

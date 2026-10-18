@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { buildCompactedRows, createPlan } from "../plugins/riverbed-compact/src/compact";
-import type { TranscriptRow } from "../plugins/riverbed-compact/src/transcript";
+import { buildCompactedRows, createPlan } from "../plugins/tiered-compact/src/compact";
+import type { TranscriptRow } from "../plugins/tiered-compact/src/transcript";
 import { assistantRow, chainRows, textBlock, toolResultRow, toolUseBlock, userRow } from "./helpers";
 
 /**

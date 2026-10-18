@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { buildCompactedRows, createPlan, isScaffoldTurn, SCAFFOLD_MARKER } from "../plugins/riverbed-compact/src/compact";
-import type { TranscriptRow } from "../plugins/riverbed-compact/src/transcript";
+import { buildCompactedRows, createPlan, isScaffoldTurn, SCAFFOLD_MARKER } from "../plugins/tiered-compact/src/compact";
+import type { TranscriptRow } from "../plugins/tiered-compact/src/transcript";
 import { assistantRow, chainRows, textBlock, userRow } from "./helpers";
 
 /**
@@ -151,7 +151,7 @@ describe("the orchestration turn is detected without a marker", () => {
   }
 
   function turnWith(row: TranscriptRow) {
-    const u = userRow("/riverbed-compact 12", null);
+    const u = userRow("/tiered-compact 12", null);
     const a = assistantRow([textBlock("orchestrating, no marker written")], null);
     return createPlan(chainRows([[userRow("earlier", null)],
                                  [assistantRow([textBlock("work")], null)],
@@ -159,19 +159,19 @@ describe("the orchestration turn is detected without a marker", () => {
   }
 
   test("an UNMARKED turn holding the compaction payload is scaffolding", () => {
-    const plan = turnWith(payloadRow("[riverbed-compact]", null));
+    const plan = turnWith(payloadRow("[tiered-compact]", null));
     expect(plan.preservedTurns.some(isScaffoldTurn)).toBe(true);
   });
 
   test("the --eras payload counts too", () => {
-    const plan = turnWith(payloadRow("[riverbed-compact --eras]", null));
+    const plan = turnWith(payloadRow("[tiered-compact --eras]", null));
     expect(plan.preservedTurns.some(isScaffoldTurn)).toBe(true);
   });
 
-  test("a DIFFERENT riverbed hook's injected context is NOT scaffolding", () => {
-    // The resident-context watch fires on ordinary turns. Matching "[riverbed"
+  test("a DIFFERENT tiered-compact hook's injected context is NOT scaffolding", () => {
+    // The resident-context watch fires on ordinary turns. Matching "[tiered-compact"
     // loosely would stub real conversation.
-    const row = payloadRow("[riverbed] This session's resident context is", null);
+    const row = payloadRow("[tiered] This session's resident context is", null);
     const plan = turnWith(row);
     expect(plan.preservedTurns.some(isScaffoldTurn)).toBe(false);
   });

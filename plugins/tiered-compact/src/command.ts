@@ -6,12 +6,12 @@ export type UserPromptSubmitHookInput = {
   prompt: string;
 };
 
-const commandHeadPattern = /^\/(?:riverbed-compact:)?riverbed-compact\b([\s\S]*)$/;
+const commandHeadPattern = /^\/(?:tiered-compact:)?tiered-compact\b([\s\S]*)$/;
 
 // Slash-command dispatch (picking the command from the menu rather than
 // typing it) delivers the prompt as command XML, not the raw string:
-//   <command-message>riverbed-compact:riverbed-compact</command-message>
-//   <command-name>/riverbed-compact:riverbed-compact</command-name>
+//   <command-message>tiered-compact:tiered-compact</command-message>
+//   <command-name>/tiered-compact:tiered-compact</command-name>
 //   <command-args>--eras</command-args>
 // Observed live 2026-08-27: the raw-form regex missed it, the hook never
 // fired, the fallback skill shim loaded instead, and an authored eras file
@@ -26,10 +26,10 @@ const commandHeadPattern = /^\/(?:riverbed-compact:)?riverbed-compact\b([\s\S]*)
 // two that discussed them. Anchoring costs nothing and closes the hole under
 // both multiline and single-line regex semantics.
 const commandXmlPattern =
-  /^<command-message>[^<]*<\/command-message>\s*<command-name>\/(?:riverbed-compact:)?riverbed-compact<\/command-name>(?:[\s\S]*?<command-args>([\s\S]*?)<\/command-args>)?/;
+  /^<command-message>[^<]*<\/command-message>\s*<command-name>\/(?:tiered-compact:)?tiered-compact<\/command-name>(?:[\s\S]*?<command-args>([\s\S]*?)<\/command-args>)?/;
 
 const USAGE =
-  "Usage: /riverbed-compact [N] [--fork [K] | --subagent [K]] [--model <id>] "
+  "Usage: /tiered-compact [N] [--fork [K] | --subagent [K]] [--model <id>] "
   + "[--eras [K]] (worker K: 1-16; --model only with --subagent; --eras K = "
   + "collapse prefix eras older than the K newest, default 1)";
 
@@ -39,14 +39,14 @@ export type Worker =
   | { type: "fork"; count: number | null }
   | { type: "subagent"; count: number | null; model: string | null };
 
-export type RiverbedCompactCommand = {
+export type TieredCompactCommand = {
   /**
    * Recent assistant turns to keep whole.
    *
    * null means the user gave no N at all — which is NOT 0. `--eras` alone used
    * to parse to 0, and createPlan reads `keepTurns <= 0` as "summarize every
    * turn", so asking for a deep-history pass silently compacted the entire live
-   * working thread. An omitted N now preserves the live bed and collapses eras
+   * working thread. An omitted N now preserves the live conversation and collapses eras
    * only; an EXPLICIT 0 still means compact everything.
    */
   keepTurns: number | null;
@@ -79,13 +79,13 @@ export function parseHookInput(rawInput: string): UserPromptSubmitHookInput {
   };
 }
 
-export function parseRiverbedCompactCommand(
+export function parseTieredCompactCommand(
   prompt: string,
-): RiverbedCompactCommand | null {
+): TieredCompactCommand | null {
   let effectivePrompt = prompt.trim();
   const xml = commandXmlPattern.exec(effectivePrompt);
   if (xml !== null) {
-    effectivePrompt = `/riverbed-compact ${(xml[1] ?? "").trim()}`.trim();
+    effectivePrompt = `/tiered-compact ${(xml[1] ?? "").trim()}`.trim();
   }
   const head = effectivePrompt.match(commandHeadPattern);
   if (!head) {

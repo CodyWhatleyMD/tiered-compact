@@ -32,14 +32,14 @@ import {
   createPlan,
   isScaffoldTurn,
   SCAFFOLD_MARKER,
-} from "../plugins/riverbed-compact/src/compact";
+} from "../plugins/tiered-compact/src/compact";
 import {
   buildAssistantTurns,
   readActiveTranscriptRows,
   readTranscriptRows,
-} from "../plugins/riverbed-compact/src/transcript";
-import { turnKey } from "../plugins/riverbed-compact/src/summaries";
-import { readOmittedContent } from "../plugins/riverbed-compact/src/omission";
+} from "../plugins/tiered-compact/src/transcript";
+import { turnKey } from "../plugins/tiered-compact/src/summaries";
+import { readOmittedContent } from "../plugins/tiered-compact/src/omission";
 import {
   buildTranscript,
   readEntries,
@@ -50,22 +50,22 @@ import {
   type BuildSpec,
 } from "./transcript-builder";
 
-const PRELOADED_CACHE_DIR = process.env["RIVERBED_COMPACT_CACHE_DIR"] as string;
+const PRELOADED_CACHE_DIR = process.env["TIERED_COMPACT_CACHE_DIR"] as string;
 
 let dir: string;
 let cacheDir: string;
 let seq = 0;
 
 beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), "riverbed-roundtrip-"));
-  cacheDir = await mkdtemp(join(tmpdir(), "riverbed-cache-"));
-  process.env["RIVERBED_COMPACT_CACHE_DIR"] = cacheDir;
+  dir = await mkdtemp(join(tmpdir(), "tiered-roundtrip-"));
+  cacheDir = await mkdtemp(join(tmpdir(), "tiered-cache-"));
+  process.env["TIERED_COMPACT_CACHE_DIR"] = cacheDir;
 });
 
 afterAll(async () => {
   // Restore, never delete: the preload (tests/setup.ts) owns this variable,
   // and unsetting it here sent every LATER test file to the real cache.
-  process.env["RIVERBED_COMPACT_CACHE_DIR"] = PRELOADED_CACHE_DIR;
+  process.env["TIERED_COMPACT_CACHE_DIR"] = PRELOADED_CACHE_DIR;
   await rm(dir, { recursive: true, force: true });
   await rm(cacheDir, { recursive: true, force: true });
 });

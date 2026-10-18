@@ -2,35 +2,35 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compactTranscript, createPlan } from "../plugins/riverbed-compact/src/compact";
-import { collapseCandidates, isEraStubRow, splitPrefixIntoEras } from "../plugins/riverbed-compact/src/eras";
-import { readOmittedContent } from "../plugins/riverbed-compact/src/omission";
-import { readTranscriptRows, readActiveTranscriptRows, buildAssistantTurns } from "../plugins/riverbed-compact/src/transcript";
-import type { TranscriptRow } from "../plugins/riverbed-compact/src/transcript";
+import { compactTranscript, createPlan } from "../plugins/tiered-compact/src/compact";
+import { collapseCandidates, isEraStubRow, splitPrefixIntoEras } from "../plugins/tiered-compact/src/eras";
+import { readOmittedContent } from "../plugins/tiered-compact/src/omission";
+import { readTranscriptRows, readActiveTranscriptRows, buildAssistantTurns } from "../plugins/tiered-compact/src/transcript";
+import type { TranscriptRow } from "../plugins/tiered-compact/src/transcript";
 import { assistantRow, chainRows, textBlock, toolResultRow, toolUseBlock, userRow } from "./helpers";
 
-const PRELOADED_CACHE_DIR = process.env["RIVERBED_COMPACT_CACHE_DIR"] as string;
+const PRELOADED_CACHE_DIR = process.env["TIERED_COMPACT_CACHE_DIR"] as string;
 // Without this the suite writes omission caches into the REAL
-// ~/.claude/riverbed-compact/ — three files per run, accumulating in the
+// ~/.claude/tiered-compact/ — three files per run, accumulating in the
 // user's own directory. Synthetic session ids, so nothing collided, but the
 // README promised "never real sessions" and this was the file making that
 // false.
 let eraCacheDir: string;
 beforeAll(async () => {
-  eraCacheDir = await mkdtemp(join(tmpdir(), "riverbed-eras-cache-"));
-  process.env["RIVERBED_COMPACT_CACHE_DIR"] = eraCacheDir;
+  eraCacheDir = await mkdtemp(join(tmpdir(), "tiered-eras-cache-"));
+  process.env["TIERED_COMPACT_CACHE_DIR"] = eraCacheDir;
 });
 afterAll(async () => {
   // Restore, never delete: the preload (tests/setup.ts) owns this variable,
   // and unsetting it here sent every LATER test file to the real cache.
-  process.env["RIVERBED_COMPACT_CACHE_DIR"] = PRELOADED_CACHE_DIR;
+  process.env["TIERED_COMPACT_CACHE_DIR"] = PRELOADED_CACHE_DIR;
   await rm(eraCacheDir, { recursive: true, force: true });
 });
 
 /**
  * Era-collapse gates (the era-collapse design notes):
  *  1. every user row of a collapsed era survives byte-identical
- *  2. the authored stub text lands in the bed exactly
+ *  2. the authored stub text lands in the transcript exactly
  *  3. zero branches
  *  4. the era Content ID resolves to the era's full original rows
  * Built on a REAL two-generation lineage: source -> compact (gen1) -> the
@@ -86,11 +86,11 @@ describe("splitPrefixIntoEras", () => {
   });
 });
 
-describe("era-collapse on a mature bed", () => {
+describe("era-collapse on a mature transcript", () => {
   test("gates 1-4", async () => {
     const dir = await mkdtemp(join(tmpdir(), "eras-"));
     try {
-      // A mature bed's real shape: [sum run A][preserved-forever A][sum run B]
+      // A mature transcript's real shape: [sum run A][preserved-forever A][sum run B]
       // [recent turns]. Runs A and B are separated by former keep-N turns that
       // no pass ever summarized — the exact disease era-collapse treats.
       const groups: TranscriptRow[][] = [];
@@ -121,7 +121,7 @@ describe("era-collapse on a mature bed", () => {
       expect(candidates.length).toBe(1);
 
       // summaries for whatever needs summarizing this pass
-      await Bun.write(join(dir, "riverbed-summaries.json"), JSON.stringify({ transcript: sid, summaries: Object.fromEntries(plan.summarizedTurns.map(t => [t.rows.find(r => r.type === "assistant")!.uuid, "fresh summary"])) }));
+      await Bun.write(join(dir, "tiered-summaries.json"), JSON.stringify({ transcript: sid, summaries: Object.fromEntries(plan.summarizedTurns.map(t => [t.rows.find(r => r.type === "assistant")!.uuid, "fresh summary"])) }));
       const texts = { [candidates[0]!.key]: "ERA STUB: the eraA arc — diagnostic cue text, pinned lines exact" };
       const dstId = "00000000-0000-4000-8000-0000000000m1";
       const dst = join(dir, `${dstId}.jsonl`);
@@ -140,13 +140,13 @@ describe("era-collapse on a mature bed", () => {
       // gate 1: every user row byte-identical, INCLUDING the collapsed era's
       const outUser = out.map(r => JSON.stringify((r as any).message?.content) ?? "");
       for (const w of userWordsBefore) expect(outUser.some(c => c === w)).toBe(true);
-      // gate 2: stub present with authored text; collapsed prose gone from bed
+      // gate 2: stub present with authored text; collapsed prose gone from transcript
       const stubs = out.filter(isEraStubRow);
       expect(stubs.length).toBe(1);
       expect(JSON.stringify(stubs[0])).toContain("ERA STUB");
       expect(out.some(r => JSON.stringify(r).includes("full-fidelity eraA prose"))).toBe(false);
       // gate 4: content id resolves to the era's full original rows
-      const eraMeta = (stubs[0] as any).riverbedCompact.era;
+      const eraMeta = (stubs[0] as any).tieredCompact.era;
       expect(typeof eraMeta.contentId).toBe("string");
       // and the stub TEXT names the same id, so a live reader can retrieve it
       expect(JSON.stringify((stubs[0] as any).message.content)).toContain(eraMeta.contentId);
@@ -154,8 +154,8 @@ describe("era-collapse on a mature bed", () => {
       expect(recovered).not.toBeNull();
       expect(recovered!).toContain("full-fidelity eraA prose");
       expect(recovered!).toContain("exact human words eraA");
-      // SECOND PASS: the bed re-collapses. Stubs are boundaries, not poison —
-      // the old rule ("an era containing a stub is done") fused a live bed
+      // SECOND PASS: the transcript re-collapses. Stubs are boundaries, not poison —
+      // the old rule ("an era containing a stub is done") fused a live transcript
       // into one immune 508-turn era (observed 2026-08-27). Pass 2 must find
       // candidates among what pass 1 kept, and pass-1 stubs must survive it.
       const plan2 = createPlan(await readActiveTranscriptRows(dst), 1);
@@ -163,7 +163,7 @@ describe("era-collapse on a mature bed", () => {
       const candidates2 = collapseCandidates(eras2, 1);
       expect(candidates2.length).toBeGreaterThan(0);
       const texts2 = Object.fromEntries(candidates2.map(e => [e.key, `ERA STUB PASS2: ${e.key.slice(0, 8)}`]));
-      await Bun.write(join(dir, "riverbed-summaries.json"), JSON.stringify({ transcript: dstId, summaries: Object.fromEntries(plan2.summarizedTurns.map(t => [t.rows.find(r => r.type === "assistant")!.uuid, "pass2 summary"])) }));
+      await Bun.write(join(dir, "tiered-summaries.json"), JSON.stringify({ transcript: dstId, summaries: Object.fromEntries(plan2.summarizedTurns.map(t => [t.rows.find(r => r.type === "assistant")!.uuid, "pass2 summary"])) }));
       const dst2Id = "00000000-0000-4000-8000-0000000000m2";
       const dst2 = join(dir, `${dst2Id}.jsonl`);
       expect(await compactTranscript(dst, dst2, dst2Id, 1, null, { keepNewest: 1, texts: texts2 })).not.toBeNull();
@@ -214,10 +214,10 @@ describe("eras file auto-use (the dropped-flag hole)", () => {
       const plan = createPlan(await readActiveTranscriptRows(src), 2);
       const candidates = collapseCandidates(splitPrefixIntoEras(plan.prefixTurns), 1);
       expect(candidates.length).toBeGreaterThan(0);
-      await Bun.write(join(dir, "riverbed-summaries.json"), JSON.stringify({ transcript: sid, summaries: Object.fromEntries(plan.summarizedTurns.map(t => [t.rows.find(r => r.type === "assistant")!.uuid, "s"])) }));
-      await Bun.write(join(dir, "riverbed-eras.json"), JSON.stringify({ transcript: sid, eras: Object.fromEntries(candidates.map(e => [e.key, "AUTO-USED STUB"])) }));
+      await Bun.write(join(dir, "tiered-summaries.json"), JSON.stringify({ transcript: sid, summaries: Object.fromEntries(plan.summarizedTurns.map(t => [t.rows.find(r => r.type === "assistant")!.uuid, "s"])) }));
+      await Bun.write(join(dir, "tiered-eras.json"), JSON.stringify({ transcript: sid, eras: Object.fromEntries(candidates.map(e => [e.key, "AUTO-USED STUB"])) }));
       // simulate the hook's auto-use path: eras=null but the file exists
-      const { loadErasFile } = await import("../plugins/riverbed-compact/src/eras");
+      const { loadErasFile } = await import("../plugins/tiered-compact/src/eras");
       const erasFile = await loadErasFile(src);
       expect(erasFile).not.toBeNull();
       const dst = join(dir, "00000000-0000-4000-8000-0000000000a1.jsonl");

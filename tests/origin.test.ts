@@ -12,8 +12,8 @@
  * number of subsequent compactions.
  */
 import { describe, expect, test } from "bun:test";
-import { originKey, type TranscriptRow, type Turn } from "../plugins/riverbed-compact/src/transcript";
-import { resolveTurnSummary, turnKey } from "../plugins/riverbed-compact/src/summaries";
+import { originKey, type TranscriptRow, type Turn } from "../plugins/tiered-compact/src/transcript";
+import { resolveTurnSummary, turnKey } from "../plugins/tiered-compact/src/summaries";
 
 function row(uuid: string, originUuid?: string): TranscriptRow {
   const r: TranscriptRow = {

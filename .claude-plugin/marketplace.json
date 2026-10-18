@@ -1,14 +1,14 @@
 {
-  "name": "riverbed",
-  "description": "Riverbed plugins: directed context compaction for Claude Code.",
+  "name": "tiered-compact",
+  "description": "Tiered Compact plugins: directed context compaction for Claude Code.",
   "owner": {
     "name": "Cody Whatley",
     "url": "https://github.com/CodyWhatleyMD"
   },
   "plugins": [
     {
-      "name": "riverbed-compact",
-      "source": "./plugins/riverbed-compact",
+      "name": "tiered-compact",
+      "source": "./plugins/tiered-compact",
       "description": "Directed, lossless context compaction: the live session authors the summaries; the hook assembles.",
       "license": "BSD-3-Clause",
       "author": {

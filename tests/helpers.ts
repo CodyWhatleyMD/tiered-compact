@@ -3,7 +3,7 @@ import type {
   JsonRecord,
   TranscriptRow,
   Turn,
-} from "../plugins/riverbed-compact/src/transcript";
+} from "../plugins/tiered-compact/src/transcript";
 
 let clock = 0;
 

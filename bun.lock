@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "riverbed-compact-workspace",
+      "name": "tiered-compact-workspace",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.21.3",
       },

@@ -1,0 +1,19 @@
+{
+  "description": "Intercepts /tiered-compact and creates a compacted destination session.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "^/(?:tiered-compact:)?(?:tiered-compact|whoami)(?:\\s+.*)?$|^<command-message>[^<]*</command-message>\\s*<command-name>/(?:tiered-compact:)?(?:tiered-compact|whoami)</command-name>",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/src/hook.ts"],
+            "timeout": 570,
+            "statusMessage": "Running Tiered Compact"
+          }
+        ]
+      }
+    ]
+  }
+}

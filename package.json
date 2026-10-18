@@ -1,7 +1,7 @@
 {
-  "name": "riverbed-compact-workspace",
+  "name": "tiered-compact-workspace",
   "private": true,
-  "description": "Riverbed Compact \u2014 directed, lossless context compaction plugin for Claude Code.",
+  "description": "Tiered Compact \u2014 directed, lossless context compaction plugin for Claude Code.",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",

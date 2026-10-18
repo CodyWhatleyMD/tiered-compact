@@ -7,6 +7,7 @@ import {
 } from "./eras";
 import { randomUUID } from "node:crypto";
 import { loadOmissionCache, saveOmissionCache } from "./omission";
+import { channelKind, pointerLine, rowText } from "./channel";
 import { pruneTranscriptRow, type PruneContext } from "./prune";
 import {
   SUMMARIES_FILENAME,
@@ -44,14 +45,18 @@ export type Plan = {
  * turns (the directive-writing turn itself, pre-compaction memory-writing
  * narration) cost zero in the compacted output.
  */
-export const SCAFFOLD_MARKER = "[[riverbed:scaffold]]";
+export const SCAFFOLD_MARKER = "[[tiered:scaffold]]";
 
 const SCAFFOLD_STUB_TEXT =
-  "[A scaffolding turn was removed here by riverbed-compact.]";
+  "[A scaffolding turn was removed here by tiered-compact.]";
 
-const POST_COMPACTION_NOTICE = `<post-compaction-notice>
-A compaction operation has just been applied to all messages above. You may have to reread certain files to regain context. Certain historical tool input/output may have been omitted due to length. If the exact I/O of the tool call needs to be retrieved and functionality cannot be replicated via a new tool call, call the read_omitted_content tool with the appropriate Content ID to reread the tool I/O content.
-</post-compaction-notice>`;
+const POST_COMPACTION_TEXT = "A compaction operation has just been applied to all messages above. You may have to reread certain files to regain context. Certain historical tool input/output may have been omitted due to length. If the exact I/O of the tool call needs to be retrieved and functionality cannot be replicated via a new tool call, call the read_omitted_content tool with the appropriate Content ID to reread the tool I/O content.";
+
+/** The boundary row's text; `extra` adds a paragraph (e.g. carried mods). */
+export function postCompactionNotice(extra: string | null = null): string {
+  const body = extra ? `${POST_COMPACTION_TEXT}\n\n${extra}` : POST_COMPACTION_TEXT;
+  return `<post-compaction-notice>\n${body}\n</post-compaction-notice>`;
+}
 
 /**
  * What a compaction actually did — an INVENTORY, not a verdict. A verdict
@@ -64,6 +69,8 @@ A compaction operation has just been applied to all messages above. You may have
 export type CompactionInventory = {
   summariesConsumed: number;
   erasCollapsed: number;
+  pointersCarried: number;
+  pointersRefused: number;
   prefixTurns: number;
   summarizedTurns: number;
   preservedTurns: number;
@@ -77,7 +84,8 @@ export async function compactTranscript(
   sessionId: string,
   keepTurns: number | null,
   cwd: string | null = null,
-  eras: { keepNewest: number; texts: Record<string, string> } | null = null,
+  eras: { keepNewest: number; texts: Record<string, string>; pointers?: string[] } | null = null,
+  notice: string | null = null,
 ): Promise<CompactionInventory | null> {
   const rows = await readActiveTranscriptRows(sourceTranscriptPath);
   const plan = createPlan(rows, keepTurns);
@@ -88,7 +96,7 @@ export async function compactTranscript(
   const eraWork: EraWork | null =
     eras === null
       ? null
-      : resolveEraWork(plan.prefixTurns, eras.keepNewest, eras.texts);
+      : resolveEraWork(plan.prefixTurns, eras.keepNewest, eras.texts, eras.pointers ?? []);
   if (
     plan.summarizedTurns.length === 0
     && !hasPreservedScaffolds
@@ -101,7 +109,7 @@ export async function compactTranscript(
     turn => !isScaffoldTurn(turn),
   );
   // Mode B only: summaries are written by the live in-context instance into a
-  // riverbed-summaries.json next to the transcript (see summaries.ts /
+  // tiered-summaries.json next to the transcript (see summaries.ts /
   // plan.ts). There is deliberately no headless-resume fallback — that path
   // cannot survive large transcripts ("Prompt is too long"), which is the
   // whole reason mode B exists. A missing file is a hard error, not a silent
@@ -111,7 +119,7 @@ export async function compactTranscript(
     throw new Error(
       `No ${SUMMARIES_FILENAME} found next to the transcript, but `
         + `${turnsToSummarize.length} turn(s) need summaries. Run `
-        + `/riverbed-compact N to receive authoring instructions (inline by `
+        + `/tiered-compact N to receive authoring instructions (inline by `
         + `default; add --fork [K] or --subagent [K] to delegate), then re-run.`,
     );
   }
@@ -144,6 +152,7 @@ export async function compactTranscript(
     summaries,
     sessionId,
     eraWork,
+    notice,
   );
   const metadataEntries = await readPreservedMetadataEntries(
     sourceTranscriptPath,
@@ -160,6 +169,8 @@ export async function compactTranscript(
   return {
     summariesConsumed: summaries.length,
     erasCollapsed: eraWork === null ? 0 : eraWork.candidateKeys.size,
+    pointersCarried: eraWork === null ? 0 : eraWork.tally.applied,
+    pointersRefused: eraWork === null ? 0 : eraWork.tally.refused,
     prefixTurns: plan.prefixTurns.length,
     summarizedTurns: plan.summarizedTurns.length,
     preservedTurns: plan.preservedTurns.length,
@@ -217,7 +228,7 @@ export function createPlan(
   const turns = buildAssistantTurns(rows);
   const compactionStartIndex =
     turns.findLastIndex(turn => turn.rows.some(isCompactSummaryRow)) + 1;
-  // null = no N given: preserve the whole live bed (an eras-only pass).
+  // null = no N given: preserve the whole live transcript (an eras-only pass).
   // 0 = the user explicitly asked to summarize everything.
   const compactionEndIndex =
     keepTurns === null
@@ -244,15 +255,15 @@ export function createPlan(
  * depends on the model remembering to write it — and unmarked orchestration turns
  * do occur in the field.
  *
- * Matched as a prefix on the exact headers, NOT on "[riverbed". A sibling hook
- * (the resident-context watch) injects 66 rows opening "[riverbed] This
+ * Matched as a prefix on the exact headers, NOT on "[tiered-compact". A sibling hook
+ * (the resident-context watch) injects 66 rows opening "[tiered] This
  * session's resident conte…" on ORDINARY turns; treating those as scaffolding
  * would stub real conversation. Measured: 52 + 14 compaction payload rows
  * against 7,156 other injected-context rows, none of which collide.
  */
 const ORCHESTRATION_PAYLOAD_HEADERS = [
-  "[riverbed-compact]",
-  "[riverbed-compact --eras]",
+  "[tiered-compact]",
+  "[tiered-compact --eras]",
 ];
 
 function isOrchestrationPayloadRow(row: TranscriptRow): boolean {
@@ -291,12 +302,19 @@ export function isScaffoldTurn(turn: Turn): boolean {
       return false;
     }
 
-    // Any block, not just `text`. Scanning only text blocks meant a marker
-    // inside a thinking block, a tool_use input, or a tool_result was
-    // invisible — and the compaction's own dispatch turn puts it exactly there,
-    // in the Agent/Bash call that carries the directive. A turn that says the
-    // word anywhere is claiming to be scaffolding; take it at its word.
-    return content.some(block => isRecord(block) && blockMentionsMarker(block));
+    // Not just `text`: the compaction's own dispatch turn puts the marker in
+    // the Agent/Bash call that carries the directive, so tool calls count.
+    // Thinking does not. A marker in thinking is the session talking ABOUT the
+    // marker, usually while working on this plugin, and taking that as a claim
+    // erased a real turn of work (2026-10-18). The trade is lopsided: a false
+    // positive deletes work, a false negative keeps a machinery turn whole, and
+    // orchestration turns are caught structurally above in any case.
+    return content.some(
+      block => isRecord(block)
+        && block["type"] !== "thinking"
+        && block["type"] !== "redacted_thinking"
+        && blockMentionsMarker(block),
+    );
   });
 }
 
@@ -327,6 +345,7 @@ export async function buildCompactedRows(
   summaries: string[],
   sessionId: string,
   eraWork: EraWork | null = null,
+  notice: string | null = null,
 ): Promise<TranscriptRow[]> {
   const rows: TranscriptRow[] = [];
   const copiedUuids = new Map<string, string>();
@@ -358,17 +377,24 @@ export async function buildCompactedRows(
     message: {
       id: `msg_${randomUUID()}`,
       role: "user",
-      content: POST_COMPACTION_NOTICE,
+      content: postCompactionNotice(notice),
     },
     logicalParentUuid: lastOriginalRow.uuid,
+    // The session this one was compacted from. Copied rows take the new
+    // session's id, so without this the predecessor vanishes from the record:
+    // the lineage check here (stampMatchesLineage) and a companion mod's draft import
+    // both read it. One row is enough; each successor carries its own parent.
+    ...(typeof plan.baseRow.sessionId === "string" && plan.baseRow.sessionId !== sessionId
+      ? { originSessionId: plan.baseRow.sessionId }
+      : {}),
     // Dual-stamped. `magicCompact` is what the upstream plugin reads, so a
-    // session compacted here stays recompactable by it; `riverbedCompact` is
+    // session compacted here stays recompactable by it; `tieredCompact` is
     // ours and is what we would keep if upstream ever moves off that field
     // (their own 2026-08 spec already describes a native boundary row).
     magicCompact: {
       boundary: true,
     },
-    riverbedCompact: {
+    tieredCompact: {
       boundary: true,
     },
   });
@@ -383,7 +409,7 @@ export async function buildCompactedRows(
 
   // The refined invariant. Prefix TEXT rows stay byte-faithful forever —
   // summaries, pinned verbatims, user words: the curated layer, and the whole
-  // point of the riverbed. Prefix TOOL rows get the deep tier, reusing the
+  // point of the tiered-compact. Prefix TOOL rows get the deep tier, reusing the
   // Content IDs prior compactions already minted. pruneTranscriptRow only ever
   // reaches into tool_use inputs and tool_result contents, so passing whole
   // rows through it is safe for the text; keepOnlyToolBlocks is deliberately
@@ -440,6 +466,25 @@ export async function buildCompactedRows(
             || isEraStubRow(row)
           ) {
             const copied = copyRow(row, sessionId, timestamp, parentUuid);
+            // The author may carry a row that is in the person's channel but
+            // not their words as a pointer; the original is already in this
+            // era's full rows. Typed rows are never pointered (channel.ts).
+            if (eraWork.pointers.has(originKey(row)) && turn.userRows.includes(row)) {
+              const kind = channelKind(row);
+              if (kind === "typed") {
+                eraWork.tally.refused += 1;
+              } else {
+                (copied as Record<string, unknown>)["message"] = {
+                  ...(isRecord(copied.message) ? copied.message : {}),
+                  content: pointerLine(kind, row, contentId),
+                };
+                (copied as Record<string, unknown>)["tieredCompact"] = {
+                  ...(isRecord(copied["tieredCompact"]) ? copied["tieredCompact"] : {}),
+                  pointer: { kind, chars: rowText(row).length, contentId },
+                };
+                eraWork.tally.applied += 1;
+              }
+            }
             rows.push(copied);
             parentUuid = copied.uuid;
           }
@@ -490,7 +535,7 @@ export async function buildCompactedRows(
     // Scaffoldness is orthogonal to REGION, and reading it region-wise was a
     // real leak. A scaffold turn is not always a preserved turn: an abandoned
     // or interrupted compaction run that later work buried, or an explicit
-    // `/riverbed-compact 0`, puts it in the SUMMARIZED region — and this loop
+    // `/tiered-compact 0`, puts it in the SUMMARIZED region — and this loop
     // used to run to completion before the isScaffoldTurn check below, so the
     // attachment branch copied compaction-time input and the stub was emitted
     // right after it. Reproduced on real transcripts at keep=0, carrying
@@ -788,7 +833,7 @@ function keepOnlyToolBlocks(row: TranscriptRow): void {
 // NB: this is our own marker, NOT Claude Code's native `isCompactSummary`
 // field — see isHumanUserRow in transcript.ts.
 function isCompactSummaryRow(row: TranscriptRow): boolean {
-  for (const field of ["riverbedCompact", "magicCompact"]) {
+  for (const field of ["tieredCompact", "magicCompact"]) {
     const marker = row[field];
     if (isRecord(marker) && marker["summary"] === true) {
       return true;
@@ -824,7 +869,7 @@ function createAssistantSummaryRow(
   copied["magicCompact"] = { summary: true };
   // Generation tag: which compaction pass authored this summary. Summary-run
   // adjacency erases generation identity (one summaries pass after an era
-  // pass fused a live bed into one immune 507-turn era, 2026-08-27); the tag
+  // pass fused a live transcript into one immune 507-turn era, 2026-08-27); the tag
   // survives byte-faithful copying forever, so eras stay separable no matter
   // how the runs merge. sessionId of the DESTINATION is unique per pass.
   //
@@ -832,7 +877,7 @@ function createAssistantSummaryRow(
   // and the generation tag are different facts about the same row, and an
   // earlier port of the dual-stamp that overwrote one with the other is
   // exactly how the two repos silently diverged.
-  copied["riverbedCompact"] = { summary: true, gen: sessionId };
+  copied["tieredCompact"] = { summary: true, gen: sessionId };
   return copied;
 }
 
@@ -861,7 +906,7 @@ function createScaffoldStubRow(
     stop_sequence: null,
   };
   delete copied["magicCompact"];
-  copied["riverbedCompact"] = { scaffold: true };
+  copied["tieredCompact"] = { scaffold: true };
   return copied;
 }
 

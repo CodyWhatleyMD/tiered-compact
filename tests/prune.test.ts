@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { pruneTranscriptRow } from "../plugins/riverbed-compact/src/prune";
-import type { TranscriptRow } from "../plugins/riverbed-compact/src/transcript";
+import { pruneTranscriptRow } from "../plugins/tiered-compact/src/prune";
+import type { TranscriptRow } from "../plugins/tiered-compact/src/transcript";
 
 type Cache = { version: 1; nextId: number; entries: Record<string, { content: string }> };
 

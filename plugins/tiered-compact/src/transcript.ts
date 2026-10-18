@@ -415,9 +415,9 @@ function compareByTimestamp(a: TranscriptRow, b: TranscriptRow): number {
 
 // The `magicCompact` row markers are intentionally kept under the original
 // field name so sessions compacted by the upstream Magic Compact plugin and
-// by Riverbed Compact remain mutually recompactable.
+// by Tiered Compact remain mutually recompactable.
 function isCompactBoundary(row: TranscriptRow): boolean {
-  for (const field of ["riverbedCompact", "magicCompact"]) {
+  for (const field of ["tieredCompact", "magicCompact"]) {
     const marker = row[field];
     if (isRecord(marker) && marker["boundary"] === true) {
       return true;
@@ -447,7 +447,7 @@ function isToolResultRow(row: TranscriptRow): boolean {
  * Measured before fixing: one session on this machine holds four native
  * compactions at 18.5k, 18.4k, 19.5k and 22.5k characters — ~79k of machine
  * recap that would ride as human speech. Another transcript already carries
- * one with an `originUuid`, i.e. it was copied THROUGH a riverbed pass.
+ * one with an `originUuid`, i.e. it was copied THROUGH a tiered-compact pass.
  *
  * It is still summarizable content — it just is not the human's words, and the
  * whole point of this plugin is that the generic recap is the thing being

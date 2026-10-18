@@ -4,8 +4,8 @@ import { join } from "node:path";
 import {
   buildCompactedRows,
   createPlan,
-} from "../plugins/riverbed-compact/src/compact";
-import type { TranscriptRow } from "../plugins/riverbed-compact/src/transcript";
+} from "../plugins/tiered-compact/src/compact";
+import type { TranscriptRow } from "../plugins/tiered-compact/src/transcript";
 import {
   assistantRow,
   chainRows,
@@ -17,7 +17,7 @@ import {
  * The README makes a PUBLIC claim about the rows this plugin emits, and about
  * how they interoperate with someone else's software:
  *
- *   "marker rows are dual-stamped (`riverbedCompact` + the upstream
+ *   "marker rows are dual-stamped (`tieredCompact` + the upstream
  *    `magicCompact` field), so sessions compacted by either plugin remain
  *    mutually recompactable"
  *
@@ -57,7 +57,7 @@ describe("the interop promise, as emitted", () => {
     // upstream reads this one — dropping it breaks THEIR ability to recompact us
     expect(marker(boundary!, "magicCompact")?.["boundary"]).toBe(true);
     // ours — dropping it breaks the README
-    expect(marker(boundary!, "riverbedCompact")?.["boundary"]).toBe(true);
+    expect(marker(boundary!, "tieredCompact")?.["boundary"]).toBe(true);
   });
 
   test("summary rows are dual-stamped", async () => {
@@ -67,20 +67,20 @@ describe("the interop promise, as emitted", () => {
     );
     expect(summaryRows.length).toBeGreaterThan(0);
     for (const row of summaryRows) {
-      expect(marker(row, "riverbedCompact")?.["summary"]).toBe(true);
+      expect(marker(row, "tieredCompact")?.["summary"]).toBe(true);
     }
   });
 
   test("the generation tag survives alongside the summary marker", async () => {
     const compacted = await compact();
     const summaryRows = compacted.filter(
-      r => marker(r, "riverbedCompact")?.["summary"] === true,
+      r => marker(r, "tieredCompact")?.["summary"] === true,
     );
     expect(summaryRows.length).toBeGreaterThan(0);
     for (const row of summaryRows) {
       // Adding `summary: true` by assignment would silently erase this, and
       // era separability depends on it.
-      expect(marker(row, "riverbedCompact")?.["gen"]).toBe("destination-session-0003");
+      expect(marker(row, "tieredCompact")?.["gen"]).toBe("destination-session-0003");
     }
   });
 
@@ -88,7 +88,7 @@ describe("the interop promise, as emitted", () => {
     const readme = await readFile(join(import.meta.dir, "..", "README.md"), "utf8");
     const claimsDualStamp = /dual-stamped/i.test(readme);
     const claimsBothFields =
-      readme.includes("riverbedCompact") && readme.includes("magicCompact");
+      readme.includes("tieredCompact") && readme.includes("magicCompact");
     // If you deliberately stop dual-stamping, rewrite the README bullet in the
     // same commit — then delete this test. Do not delete it to get to green.
     expect(claimsDualStamp && claimsBothFields).toBe(true);
@@ -96,7 +96,7 @@ describe("the interop promise, as emitted", () => {
 
   test("the legacy upstream cache path is still consulted", async () => {
     const omission = await readFile(
-      join(import.meta.dir, "..", "plugins", "riverbed-compact", "src", "omission.ts"),
+      join(import.meta.dir, "..", "plugins", "tiered-compact", "src", "omission.ts"),
       "utf8",
     );
     // The other half of the README sentence: retrieval falls back to upstream's

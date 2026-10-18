@@ -46,7 +46,7 @@ export async function readOmittedContent(
     return null;
   }
 
-  // Search the Riverbed cache first, then fall back to the upstream Magic
+  // Search the Tiered Compact cache first, then fall back to the upstream Magic
   // Compact cache so omissions from sessions compacted by the original
   // plugin remain retrievable.
   for (const directory of [cacheDirectory(), legacyCacheDirectory()]) {
@@ -131,8 +131,8 @@ function cachePath(sessionId: string): string {
 
 function cacheDirectory(): string {
   return (
-    process.env["RIVERBED_COMPACT_CACHE_DIR"]
-    ?? `${homedir()}/.claude/riverbed-compact`
+    process.env["TIERED_COMPACT_CACHE_DIR"]
+    ?? `${homedir()}/.claude/tiered-compact`
   );
 }
 

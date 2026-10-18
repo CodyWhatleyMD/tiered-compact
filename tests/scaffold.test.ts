@@ -7,8 +7,8 @@ import {
   createPlan,
   isScaffoldTurn,
   SCAFFOLD_MARKER,
-} from "../plugins/riverbed-compact/src/compact";
-import type { TranscriptRow } from "../plugins/riverbed-compact/src/transcript";
+} from "../plugins/tiered-compact/src/compact";
+import type { TranscriptRow } from "../plugins/tiered-compact/src/transcript";
 import {
   assistantRow,
   chainRows,
@@ -18,18 +18,18 @@ import {
   userRow,
 } from "./helpers";
 
-const PRELOADED_CACHE_DIR = process.env["RIVERBED_COMPACT_CACHE_DIR"] as string;
+const PRELOADED_CACHE_DIR = process.env["TIERED_COMPACT_CACHE_DIR"] as string;
 let cacheDir: string;
 
 beforeAll(async () => {
-  cacheDir = await mkdtemp(join(tmpdir(), "riverbed-cache-"));
-  process.env["RIVERBED_COMPACT_CACHE_DIR"] = cacheDir;
+  cacheDir = await mkdtemp(join(tmpdir(), "tiered-cache-"));
+  process.env["TIERED_COMPACT_CACHE_DIR"] = cacheDir;
 });
 
 afterAll(async () => {
   // Restore, never delete: the preload (tests/setup.ts) owns this variable,
   // and unsetting it here sent every LATER test file to the real cache.
-  process.env["RIVERBED_COMPACT_CACHE_DIR"] = PRELOADED_CACHE_DIR;
+  process.env["TIERED_COMPACT_CACHE_DIR"] = PRELOADED_CACHE_DIR;
   await rm(cacheDir, { recursive: true, force: true });
 });
 
@@ -54,11 +54,11 @@ function buildSyntheticRows(options?: {
     assistantRow([textBlock("Log read and verified.")], null),
   ];
   const turn2 = [
-    userRow("Write the riverbed directive before we compact", null),
+    userRow("Write the tiered-compact directive before we compact", null),
     assistantRow(
       [
         textBlock(
-          `Directive written to riverbed-directive.md. ${SCAFFOLD_MARKER}`,
+          `Directive written to tiered-directive.md. ${SCAFFOLD_MARKER}`,
         ),
       ],
       null,
@@ -120,7 +120,7 @@ describe("scaffold drop in rebuilt rows", () => {
 
     // Exactly one one-line stub notes the removal.
     const stubs = rebuilt.filter(row => {
-      const marker = row["riverbedCompact"];
+      const marker = row["tieredCompact"];
       return (
         typeof marker === "object"
         && marker !== null
@@ -129,14 +129,14 @@ describe("scaffold drop in rebuilt rows", () => {
     });
     expect(stubs.length).toBe(1);
     expect(JSON.stringify(stubs[0]!.message)).toContain(
-      "A scaffolding turn was removed here by riverbed-compact.",
+      "A scaffolding turn was removed here by tiered-compact.",
     );
     // Stubs are not summary rows (would move the recompaction boundary).
     expect(stubs[0]!["magicCompact"]).toBeUndefined();
 
     // The scaffold turn's user prompt survives verbatim.
     expect(serialized).toContain(
-      "Write the riverbed directive before we compact",
+      "Write the tiered-compact directive before we compact",
     );
 
     // Non-scaffold turns got their summaries.
@@ -168,7 +168,7 @@ describe("scaffold drop in rebuilt rows", () => {
     expect(serialized).not.toContain(SCAFFOLD_MARKER);
     expect(serialized).not.toContain("Memory files updated");
     expect(serialized).toContain(
-      "A scaffolding turn was removed here by riverbed-compact.",
+      "A scaffolding turn was removed here by tiered-compact.",
     );
     // Its user prompt still survives.
     expect(serialized).toContain("Summarize where we stand");

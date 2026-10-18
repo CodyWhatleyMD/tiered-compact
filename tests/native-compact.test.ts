@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   buildAssistantTurns,
   type TranscriptRow,
-} from "../plugins/riverbed-compact/src/transcript";
-import { resolveTurnSummary } from "../plugins/riverbed-compact/src/summaries";
-import { turnUserPreview } from "../plugins/riverbed-compact/src/fork";
+} from "../plugins/tiered-compact/src/transcript";
+import { resolveTurnSummary } from "../plugins/tiered-compact/src/summaries";
+import { turnUserPreview } from "../plugins/tiered-compact/src/fork";
 import { assistantRow, chainRows, textBlock, userRow } from "./helpers";
 
 /**

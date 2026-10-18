@@ -9,7 +9,7 @@ import { readOmittedContent } from "./omission";
 const toolName = "read_omitted_content";
 
 const server = new Server(
-  { name: "riverbed-compact", version: "0.3.0" },
+  { name: "tiered-compact", version: "0.4.0" },
   { capabilities: { tools: {} } },
 );
 
@@ -18,7 +18,7 @@ server.setRequestHandler(ListToolsRequestSchema, () => ({
     {
       name: toolName,
       description:
-        "Read original tool input or output content omitted by Riverbed Compact (or a prior Magic Compact run).",
+        "Read original tool input or output content omitted by Tiered Compact (or a prior Magic Compact run).",
       inputSchema: {
         type: "object",
         properties: {

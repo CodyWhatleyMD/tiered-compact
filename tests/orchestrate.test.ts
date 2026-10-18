@@ -3,16 +3,16 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { assistantRow, chainRows, textBlock, userRow } from "./helpers";
-import type { TranscriptRow } from "../plugins/riverbed-compact/src/transcript";
+import type { TranscriptRow } from "../plugins/tiered-compact/src/transcript";
 
-const SRC = resolve(import.meta.dir, "../plugins/riverbed-compact/src");
+const SRC = resolve(import.meta.dir, "../plugins/tiered-compact/src");
 
 let workDir: string;
 let cacheDir: string;
 
 beforeAll(async () => {
-  workDir = await mkdtemp(join(tmpdir(), "riverbed-orch-"));
-  cacheDir = await mkdtemp(join(tmpdir(), "riverbed-orch-cache-"));
+  workDir = await mkdtemp(join(tmpdir(), "tiered-orch-"));
+  cacheDir = await mkdtemp(join(tmpdir(), "tiered-orch-cache-"));
 });
 
 afterAll(async () => {
@@ -55,7 +55,7 @@ async function runHook(
     ),
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, RIVERBED_COMPACT_CACHE_DIR: cacheDir },
+    env: { ...process.env, TIERED_COMPACT_CACHE_DIR: cacheDir },
   });
   return JSON.parse(await new Response(proc.stdout).text()) as Record<
     string,
@@ -74,9 +74,9 @@ function payloadOf(output: Record<string, unknown>): string {
 describe("orchestration payloads (no summaries file present)", () => {
   test("plain command injects inline instructions", async () => {
     const transcript = await writeTranscript("inline.jsonl", syntheticRows(12));
-    const payload = payloadOf(await runHook(transcript, "/riverbed-compact 4"));
+    const payload = payloadOf(await runHook(transcript, "/tiered-compact 4"));
     expect(payload).toContain("mode=inline");
-    expect(payload).toContain("riverbed-summaries.part-1.json");
+    expect(payload).toContain("tiered-summaries.part-1.json");
     expect(payload).toContain("turnsNeedingSummaries=8");
     expect(payload).toContain("boundaryKey=");
   });
@@ -84,7 +84,7 @@ describe("orchestration payloads (no summaries file present)", () => {
   test("--fork K injects K partitions covering every turn once", async () => {
     const transcript = await writeTranscript("fork.jsonl", syntheticRows(12));
     const payload = payloadOf(
-      await runHook(transcript, "/riverbed-compact 4 --fork 3"),
+      await runHook(transcript, "/tiered-compact 4 --fork 3"),
     );
     expect(payload).toContain("mode=fork");
     expect(payload).toContain("CLAUDE_CODE_FORK_SUBAGENT");
@@ -100,7 +100,7 @@ describe("orchestration payloads (no summaries file present)", () => {
   test("bare --fork defers the count to the model", async () => {
     const transcript = await writeTranscript("forkbare.jsonl", syntheticRows(12));
     const payload = payloadOf(
-      await runHook(transcript, "/riverbed-compact 4 --fork"),
+      await runHook(transcript, "/tiered-compact 4 --fork"),
     );
     expect(payload).toContain("you decide");
     expect(payload).toContain("partition these yourself");
@@ -111,7 +111,7 @@ describe("orchestration payloads (no summaries file present)", () => {
     const payload = payloadOf(
       await runHook(
         transcript,
-        "/riverbed-compact 4 --subagent 2 --model claude-haiku-4-5-20251001",
+        "/tiered-compact 4 --subagent 2 --model claude-haiku-4-5-20251001",
       ),
     );
     expect(payload).toContain("mode=subagent");
@@ -125,7 +125,7 @@ describe("merge + assembly round trip", () => {
   test("partials merge, validate, and compact end-to-end", async () => {
     const transcript = await writeTranscript("round.jsonl", syntheticRows(12));
     const payload = payloadOf(
-      await runHook(transcript, "/riverbed-compact 4 --fork 2"),
+      await runHook(transcript, "/tiered-compact 4 --fork 2"),
     );
     const boundaryKey = /boundaryKey=([a-f0-9-]+|END)/.exec(payload)![1]!;
     const partitions = JSON.parse(
@@ -153,7 +153,7 @@ describe("merge + assembly round trip", () => {
     expect(JSON.parse(mergeOut)["turnsCovered"]).toBe(8);
 
     // Second invocation assembles now that the summaries file exists.
-    const output = await runHook(transcript, "/riverbed-compact 4");
+    const output = await runHook(transcript, "/tiered-compact 4");
     expect(output["continue"]).toBe(false);
     expect(output["stopReason"]).toContain("/resume");
 
@@ -174,7 +174,7 @@ describe("merge + assembly round trip", () => {
   test("merge refuses incomplete partials and writes nothing", async () => {
     const transcript = await writeTranscript("gap.jsonl", syntheticRows(12));
     const payload = payloadOf(
-      await runHook(transcript, "/riverbed-compact 4 --fork 2"),
+      await runHook(transcript, "/tiered-compact 4 --fork 2"),
     );
     const boundaryKey = /boundaryKey=([a-f0-9-]+|END)/.exec(payload)![1]!;
     const partitions = JSON.parse(
@@ -199,7 +199,7 @@ describe("merge + assembly round trip", () => {
     const stderr = await new Response(merge.stderr).text();
     expect(await merge.exited).toBe(1);
     expect(stderr).toContain("missing");
-    expect(await Bun.file(join(workDir, "riverbed-summaries.json")).exists()).toBe(
+    expect(await Bun.file(join(workDir, "tiered-summaries.json")).exists()).toBe(
       false,
     );
     await rm(join(workDir, first.file), { force: true });

@@ -19,17 +19,17 @@
  *   - emits ONE stub row: era-authored DIAGNOSTIC text (it discriminates this
  *     era from the others — Goh & Lu 2012: diagnosticity, not fidelity),
  *     pinned verbatims exact, span, turn count, Content ID
- *   - drops everything else from the bed
+ *   - drops everything else from the transcript
  *
  * AUTHORSHIP: the session authors its OWN eras. An era stub is the most
  * fragile representation in the pipeline — it is the last form the material
- * takes — so the text comes from the live session via riverbed-eras.json,
+ * takes — so the text comes from the live session via tiered-eras.json,
  * never from a cold worker. Cold workers are the fallback for sessions that
  * can no longer run the command themselves.
  *
  * Era stubs are deliberately NOT marked as summary rows (a summary marker
  * moves the recompaction boundary — see createScaffoldStubRow). They carry
- * `riverbedCompact.era`, which also marks the era as already collapsed: a
+ * `tieredCompact.era`, which also marks the era as already collapsed: a
  * collapsed era is never a candidate again.
  */
 import { randomUUID } from "node:crypto";
@@ -51,7 +51,7 @@ export type Era = {
 // Accepts either marker; see the note in compact.ts. Not Claude Code's own
 // `isCompactSummary` field, which is a different thing entirely.
 function isCompactSummaryRow(row: TranscriptRow): boolean {
-  for (const field of ["riverbedCompact", "magicCompact"]) {
+  for (const field of ["tieredCompact", "magicCompact"]) {
     const marker = row[field];
     if (isRecord(marker) && marker["summary"] === true) {
       return true;
@@ -61,8 +61,8 @@ function isCompactSummaryRow(row: TranscriptRow): boolean {
 }
 
 export function isEraStubRow(row: TranscriptRow): boolean {
-  const riverbedCompact = row["riverbedCompact"];
-  return isRecord(riverbedCompact) && isRecord(riverbedCompact["era"]);
+  const tieredCompact = row["tieredCompact"];
+  return isRecord(tieredCompact) && isRecord(tieredCompact["era"]);
 }
 
 function turnHasSummaryRow(turn: Turn): boolean {
@@ -73,9 +73,9 @@ function turnHasSummaryRow(turn: Turn): boolean {
 function turnGeneration(turn: Turn): string | null {
   for (const row of turn.rows) {
     if (!isCompactSummaryRow(row)) continue;
-    const riverbedCompact = row["riverbedCompact"];
-    if (isRecord(riverbedCompact) && typeof riverbedCompact["gen"] === "string") {
-      return riverbedCompact["gen"];
+    const tieredCompact = row["tieredCompact"];
+    if (isRecord(tieredCompact) && typeof tieredCompact["gen"] === "string") {
+      return tieredCompact["gen"];
     }
     return "";
   }
@@ -155,7 +155,7 @@ export function collapseCandidates(eras: Era[], keepNewest: number): Era[] {
   // era with nothing left to collapse — all its rows already survive whole
   // (user rows, human-words attachments, stubs). The old rule here — "any
   // era containing a stub is done" — poisoned the whole containing era the
-  // moment bed structure re-merged, making mature lineages permanently
+  // moment transcript structure re-merged, making mature lineages permanently
   // immune to the one pass built for them.
   return eras.slice(0, cutoff).filter(era => eraHasCollapsibleMass(era));
 }
@@ -212,7 +212,7 @@ export function createEraStubRow(
         `[era ${span} · ${era.turns.length} turns · full rows: `
         + `read_omitted_content("${contentId}")]\n${stubText}`,
     },
-    riverbedCompact: {
+    tieredCompact: {
       era: {
         contentId,
         turns: era.turns.length,
@@ -232,13 +232,13 @@ export function allocateEra(
 }
 
 // ---------------------------------------------------------------------------
-// riverbed-eras.json — the era-authoring contract (mode-B twin)
+// tiered-eras.json — the era-authoring contract (mode-B twin)
 // ---------------------------------------------------------------------------
 import { dirname, join } from "node:path";
 import { rename } from "node:fs/promises";
 import { stampMatchesLineage, transcriptId } from "./summaries";
 
-export const ERAS_FILENAME = "riverbed-eras.json";
+export const ERAS_FILENAME = "tiered-eras.json";
 
 export function erasPath(transcriptPath: string): string {
   return join(dirname(transcriptPath), ERAS_FILENAME);
@@ -247,6 +247,8 @@ export function erasPath(transcriptPath: string): string {
 export type ErasFile = {
   transcript?: string;
   eras: Record<string, string>;
+  /** Row ids (origin keys) the author chose to carry as pointers; see channel.ts. */
+  pointers?: string[];
 };
 
 export async function loadErasFile(
@@ -281,9 +283,15 @@ export async function loadErasFile(
         + "from the session that authored it.",
     );
   }
+  const pointers = parsed["pointers"];
+  if (pointers !== undefined
+      && !(Array.isArray(pointers) && pointers.every(id => typeof id === "string"))) {
+    throw new Error(`${ERAS_FILENAME}: "pointers" must be a list of row ids.`);
+  }
   return {
     transcript: typeof stamp === "string" ? stamp : undefined,
     eras: parsed["eras"] as Record<string, string>,
+    ...(pointers === undefined ? {} : { pointers: pointers as string[] }),
   };
 }
 
@@ -297,6 +305,10 @@ export type EraWork = {
   eras: Era[];
   candidateKeys: Set<string>;
   texts: Record<string, string>;
+  /** Rows to carry as pointers instead of whole, when channel.ts allows it. */
+  pointers: Set<string>;
+  /** Filled in during assembly: pointers carried, and listed typed rows refused. */
+  tally: { applied: number; refused: number };
 };
 
 /**
@@ -308,6 +320,7 @@ export function resolveEraWork(
   prefixTurns: Turn[],
   keepNewest: number,
   texts: Record<string, string>,
+  pointers: readonly string[] = [],
 ): EraWork | null {
   const eras = splitPrefixIntoEras(prefixTurns);
   const candidates = collapseCandidates(eras, keepNewest);
@@ -327,5 +340,7 @@ export function resolveEraWork(
     eras,
     candidateKeys: new Set(candidates.map(era => era.key)),
     texts,
+    pointers: new Set(pointers),
+    tally: { applied: 0, refused: 0 },
   };
 }

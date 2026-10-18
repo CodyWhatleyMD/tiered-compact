@@ -2,21 +2,21 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { SCAFFOLD_MARKER } from "../plugins/riverbed-compact/src/compact";
-import type { TranscriptRow } from "../plugins/riverbed-compact/src/transcript";
+import { SCAFFOLD_MARKER } from "../plugins/tiered-compact/src/compact";
+import type { TranscriptRow } from "../plugins/tiered-compact/src/transcript";
 import { assistantRow, chainRows, textBlock, userRow } from "./helpers";
 
 const HOOK_PATH = resolve(
   import.meta.dir,
-  "../plugins/riverbed-compact/src/hook.ts",
+  "../plugins/tiered-compact/src/hook.ts",
 );
 
 let workDir: string;
 let cacheDir: string;
 
 beforeAll(async () => {
-  workDir = await mkdtemp(join(tmpdir(), "riverbed-hook-"));
-  cacheDir = await mkdtemp(join(tmpdir(), "riverbed-hook-cache-"));
+  workDir = await mkdtemp(join(tmpdir(), "tiered-hook-"));
+  cacheDir = await mkdtemp(join(tmpdir(), "tiered-hook-cache-"));
 });
 
 afterAll(async () => {
@@ -32,7 +32,7 @@ async function runHook(input: Record<string, unknown>): Promise<{
     stdin: new TextEncoder().encode(JSON.stringify(input)),
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, RIVERBED_COMPACT_CACHE_DIR: cacheDir },
+    env: { ...process.env, TIERED_COMPACT_CACHE_DIR: cacheDir, TIERED_COMPACT_DEV_MODS_DIR: join(cacheDir, "dev-mods"), TIERED_COMPACT_DRAFTS_DIR: join(cacheDir, "tiered-drafts") },
   });
   const [stdout, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -64,12 +64,12 @@ describe("hook end-to-end (synthetic transcript only)", () => {
 
   test("invalid arguments produce a usage error", async () => {
     const { stdout } = await runHook(
-      hookInput(join(workDir, "none.jsonl"), "/riverbed-compact abc"),
+      hookInput(join(workDir, "none.jsonl"), "/tiered-compact abc"),
     );
     const output = JSON.parse(stdout) as Record<string, unknown>;
     expect(output["continue"]).toBe(false);
     expect(output["stopReason"]).toContain(
-      "Usage: /riverbed-compact [N]",
+      "Usage: /tiered-compact [N]",
     );
   });
 
@@ -77,11 +77,11 @@ describe("hook end-to-end (synthetic transcript only)", () => {
     const { stdout } = await runHook(
       hookInput(
         join(workDir, "none.jsonl"),
-        "/riverbed-compact:riverbed-compact xyz",
+        "/tiered-compact:tiered-compact xyz",
       ),
     );
     const output = JSON.parse(stdout) as Record<string, unknown>;
-    expect(output["stopReason"]).toContain("Usage: /riverbed-compact");
+    expect(output["stopReason"]).toContain("Usage: /tiered-compact");
   });
 
   test("all-scaffold transcript compacts end-to-end without a summarizer", async () => {
@@ -102,13 +102,13 @@ describe("hook end-to-end (synthetic transcript only)", () => {
     );
 
     const { stdout } = await runHook(
-      hookInput(transcriptPath, "/riverbed-compact"),
+      hookInput(transcriptPath, "/tiered-compact"),
     );
     const output = JSON.parse(stdout) as Record<string, unknown>;
     expect(output["continue"]).toBe(false);
     // Inventory, not verdict — the counts must be present and the cold-door
     // instruction must name a COLD resume.
-    expect(output["stopReason"]).toContain("Riverbed Compact wrote ");
+    expect(output["stopReason"]).toContain("Tiered Compact wrote ");
     expect(output["stopReason"]).toContain("summaries consumed: ");
     expect(output["stopReason"]).toContain("eras collapsed: 0");
     expect(output["stopReason"]).toContain("claude --resume ");
@@ -121,7 +121,7 @@ describe("hook end-to-end (synthetic transcript only)", () => {
 
     expect(destination).not.toContain(SCAFFOLD_MARKER);
     expect(destination).toContain(
-      "A scaffolding turn was removed here by riverbed-compact.",
+      "A scaffolding turn was removed here by tiered-compact.",
     );
     expect(destination).toContain("Write the directive, then we compact");
     expect(destination).toContain("post-compaction-notice");
@@ -150,11 +150,11 @@ describe("hook end-to-end (synthetic transcript only)", () => {
     );
 
     const { stdout } = await runHook(
-      hookInput(transcriptPath, "/riverbed-compact 5"),
+      hookInput(transcriptPath, "/tiered-compact 5"),
     );
     const output = JSON.parse(stdout) as Record<string, unknown>;
     expect(output["continue"]).toBe(false);
-    expect(output["stopReason"]).toContain("Riverbed Compact skipped");
+    expect(output["stopReason"]).toContain("Tiered Compact skipped");
 
     // No stray destination transcript left behind.
     const files = await readdir(sessionDir);

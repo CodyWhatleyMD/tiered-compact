@@ -1,7 +1,7 @@
 {
-  "name": "riverbed-compact",
-  "version": "0.3.0",
-  "description": "Riverbed Compact plugin for Claude Code \u2014 directive-driven fork of Magic Compact.",
+  "name": "tiered-compact",
+  "version": "0.4.0",
+  "description": "Tiered Compact plugin for Claude Code \u2014 directive-driven fork of Magic Compact.",
   "type": "module",
   "module": "src/index.ts",
   "main": "src/index.ts",

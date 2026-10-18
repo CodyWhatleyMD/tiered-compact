@@ -1,8 +1,8 @@
-# Riverbed Compact
+# Tiered Compact
 
 Directed, lossless context compaction for Claude Code.
 
-Claude Code's built-in auto-compaction summarizes your session with a separate, generic pass: you don't choose what survives, and what's dropped is gone. Riverbed Compact inverts that: **the instance that lived the session decides what its successor needs** — which exact phrases must survive verbatim, which threads keep their mechanism, which detours compress to a line.
+Claude Code's built-in auto-compaction summarizes your session with a separate, generic pass: you don't choose what survives, and what's dropped is gone. Tiered Compact inverts that: **the instance that lived the session decides what its successor needs** — which exact phrases must survive verbatim, which threads keep their mechanism, which detours compress to a line.
 
 What "lossless" means here, precisely, because the two mechanisms are different:
 
@@ -11,14 +11,14 @@ What "lossless" means here, precisely, because the two mechanisms are different:
 - **Assistant prose and thinking on summarized turns are discarded**, replaced by the summary that was written to stand in for them. They are *not* in the cache. This is the whole point — the summary is the compression — but it means the authored summary is the only account of those turns that the new session can see. Write it accordingly.
 - **The original session's conversation is never modified.** One `custom-title` row is appended to mark it `[UNCOMPACTED] …` in the session list; no existing row is touched, nothing is removed, and the full transcript stays on disk — so anything the compaction dropped is still recoverable from the source.
 
-The name is the design: compaction changes the water; the riverbed — the words that carved the session — persists.
+The idea in one line: whatever else gets compressed, the person's own words are kept word for word.
 
 ## How it works
 
-`/riverbed-compact` is one self-guiding command with a simple state machine, keyed on whether a summaries file exists next to the session transcript:
+`/tiered-compact` is one self-guiding command with a simple state machine, keyed on whether a summaries file exists next to the session transcript:
 
-1. **No summaries file** → the hook computes a compaction plan (which assistant turns need summaries, anchored by turn uuid) and injects mode-specific authoring instructions into the live model's context. The model writes the summaries — itself, or via workers it dispatches — as `riverbed-summaries.part-*.json` files.
-2. `merge.ts` validates that the partials cover every planned turn (hard-failing on gaps), writes `riverbed-summaries.json`, and prints the exact follow-up command.
+1. **No summaries file** → the hook computes a compaction plan (which assistant turns need summaries, anchored by turn uuid) and injects mode-specific authoring instructions into the live model's context. The model writes the summaries — itself, or via workers it dispatches — as `tiered-summaries.part-*.json` files.
+2. `merge.ts` validates that the partials cover every planned turn (hard-failing on gaps), writes `tiered-summaries.json`, and prints the exact follow-up command.
 3. **Summaries file present** → the same command assembles the compacted session: user messages verbatim, old assistant turns replaced by the authored summaries, bulky tool I/O replaced by omission records retrievable via the `read_omitted_content` MCP tool. The original session is renamed `[UNCOMPACTED] …` and left intact. Sessions stay recompactable.
 
 **Loading the compacted session — this part matters.** The command prints `claude --resume <new-session-id>` and tells you to **exit the client first**. An in-place `/resume` switches the transcript file but carries your current window along with it, so you get a compacted session and none of the savings. The reduction only exists on a cold load.
@@ -28,15 +28,15 @@ The plan is anchored to the uuid of the first preserved turn, so the orchestrati
 ## Usage
 
 ```
-/riverbed-compact N                     # inline (default): the live instance writes the summaries
-/riverbed-compact N --fork [K]          # K forks — inherit the live context, work in parallel (experimental)
-/riverbed-compact N --subagent [K] [--model <id>]   # K blank subagents — read their turns from disk, cheap
+/tiered-compact N                     # inline (default): the live instance writes the summaries
+/tiered-compact N --fork [K]          # K forks — inherit the live context, work in parallel (experimental)
+/tiered-compact N --subagent [K] [--model <id>]   # K blank subagents — read their turns from disk, cheap
 ```
 
 - `N` — recent assistant turns to keep whole (cover your current working thread).
 - Bare `--fork` / `--subagent` — the model picks K (roughly 25–40 turns per worker, max 16).
 - `--model` — only valid with `--subagent`: forks always inherit the parent model, and inline is the live instance.
-- Turns whose text contains the literal token `[[riverbed:scaffold]]` are dropped to a one-line stub instead of summarized — use it so the compaction run itself costs nothing in the compacted output.
+- Turns whose text contains the literal token `[[tiered:scaffold]]` are dropped to a one-line stub instead of summarized — use it so the compaction run itself costs nothing in the compacted output.
 
 Choosing a mode: **inline** gives the highest fidelity on modest sessions (costs main-thread turns). **`--fork`** offloads authorship at full fidelity — each fork inherits the entire live conversation. **`--subagent`** is the budget mode — workers see only their extracted slice (via `slice.ts`), so the orchestrator's directive must spell out anything a summary has to preserve.
 
@@ -52,16 +52,16 @@ Compaction is not a one-time event on a long-lived session — you do it again, 
 - writes the era's full original rows to the omission cache under a single era Content ID — demoted, never deleted, retrievable with `read_omitted_content`
 - emits **one stub row**: diagnostic text that discriminates this era from the others, any pinned verbatims exact, plus span, turn count, and the Content ID
 
-The stub is written by the live session rather than a cold worker, via `riverbed-eras.json`. Older eras compress hard while your current arc keeps its texture.
+The stub is written by the live session rather than a cold worker, via `tiered-eras.json`. Older eras compress hard while your current arc keeps its texture.
 
 ```
-/riverbed-compact --eras [K]        # collapse eras only; the live bed is untouched
-/riverbed-compact 20 --eras [K]     # collapse eras AND compact down to 20 kept turns
+/tiered-compact --eras [K]        # collapse eras only; the live conversation is untouched
+/tiered-compact 20 --eras [K]     # collapse eras AND compact down to 20 kept turns
 ```
 
 `K` defaults to 1 and means *keep the K newest eras uncollapsed*.
 
-**Note on `N`:** omitting `N` is not the same as `N=0`. With no `N`, the live working thread is preserved and only eras are collapsed. An explicit `/riverbed-compact 0` means *summarize every turn*, which is a thing you can ask for but rarely want by accident.
+**Note on `N`:** omitting `N` is not the same as `N=0`. With no `N`, the live working thread is preserved and only eras are collapsed. An explicit `/tiered-compact 0` means *summarize every turn*, which is a thing you can ask for but rarely want by accident.
 
 ## Identity and lineage
 
@@ -86,13 +86,13 @@ This is an undocumented feature flag: it may change or disappear in any Claude C
 
 - This plugin parses Claude Code's **undocumented session-transcript internals** (JSONL rows, turn chaining, compaction markers). Any Claude Code release can break it. There is a test suite (`bun test`, over synthetic transcripts only) to catch drift — expect breakage, file issues.
 - Requires [bun](https://bun.sh) on `PATH` (the hook, scripts, and MCP server run raw TypeScript via bun; `@modelcontextprotocol/sdk` resolves via bun auto-install, or run `bun install`).
-- Omission caches live in `~/.claude/riverbed-compact/{sessionId}.json`. Retrieval falls back to the `~/.claude/magic-compact/` cache, and marker rows are dual-stamped (`riverbedCompact` + the upstream `magicCompact` field), so sessions compacted by either plugin remain mutually recompactable. (Retrieval compatibility is one-directional: this plugin reads upstream's omission cache, not vice versa.)
+- Omission caches live in `~/.claude/tiered-compact/{sessionId}.json`. Retrieval falls back to the `~/.claude/magic-compact/` cache, and marker rows are dual-stamped (`tieredCompact` + the upstream `magicCompact` field), so sessions compacted by either plugin remain mutually recompactable. (Retrieval compatibility is one-directional: this plugin reads upstream's omission cache, not vice versa.)
 
 ## Install
 
 ```
-/plugin marketplace add https://github.com/CodyWhatleyMD/riverbed-compact
-/plugin install riverbed-compact@riverbed
+/plugin marketplace add https://github.com/CodyWhatleyMD/tiered-compact
+/plugin install tiered-compact@tiered-compact
 ```
 
 Run `/reload-plugins` if Claude Code is already open.
