@@ -40,7 +40,7 @@ The plan is anchored to the uuid of the first preserved turn, so the orchestrati
 
 Choosing a mode: **inline** gives the highest fidelity on modest sessions (costs main-thread turns). **`--fork`** offloads authorship at full fidelity — each fork inherits the entire live conversation. **`--subagent`** is the budget mode — workers see only their extracted slice (via `slice.ts`), so the orchestrator's directive must spell out anything a summary has to preserve.
 
-`/whoami` is also wired — as a hook matcher rather than a registered command, so **type it**; it will not appear in the slash-command menu. It prints an inventory of the current session — which transcript file is yours, its size and row count, and the chain of ancestor session ids if it has been compacted before. Useful when several sessions are open and you need to know which one you are in before doing something irreversible to it.
+`/whoami` is also wired — registered as a skill so the client accepts it (it appears in the slash-command menu as `/tiered-compact:whoami`), and intercepted by the same hook. Current Claude Code builds reject an unregistered slash command with `Unknown command` before any hook runs, so the shim is load-bearing. It prints an inventory of the current session — which transcript file is yours, its size and row count, and the chain of ancestor session ids if it has been compacted before. Useful when several sessions are open and you need to know which one you are in before doing something irreversible to it.
 
 ## Era collapse (`--eras`)
 
