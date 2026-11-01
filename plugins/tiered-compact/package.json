@@ -1,6 +1,6 @@
 {
   "name": "tiered-compact",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Tiered Compact plugin for Claude Code \u2014 directive-driven fork of Magic Compact.",
   "type": "module",
   "module": "src/index.ts",

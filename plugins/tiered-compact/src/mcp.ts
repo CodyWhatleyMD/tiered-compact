@@ -9,7 +9,7 @@ import { readOmittedContent } from "./omission";
 const toolName = "read_omitted_content";
 
 const server = new Server(
-  { name: "tiered-compact", version: "0.4.0" },
+  { name: "tiered-compact", version: "0.4.1" },
   { capabilities: { tools: {} } },
 );
 
